@@ -1,62 +1,52 @@
-using JuMP, GLPKMathProgInterface, DataFrames
+using JuMP, GLPKMathProgInterface
 
-variables = Dict{Int, Array{Variable, 2}}()
+#=
+    Sudoku board split into 9x9x9 cubic matrix.
+    row i, column j, depth k
+    Each depth k represents the assignments [i,j]
+    of one digit in a solved board.
+=#
+
 
 # optimization model
 m = Model(solver = GLPKSolverMIP())
 
-for k in 1:5
-    global variables[k] = @variable(m, [1:2, 1:2], Bin)
-end
+# inserting binary variable assignment matrices into dictionary
+@variable(m, board[1:9, 1:9, 1:9], Bin)
 
-# staff x shift binary assignment matrix
-# 1 if employee i assigned to shift j, 0 otherwise
-@variable(m, x[1:staff, 1:shift], Bin)
-
-# maximize preference score sum
-@objective(m, Max, sum(pref_matrix[i,j]*x[i,j] for i in 1:staff, j in 1:shift))
+# arbitrary objective function
+@objective(m, Max, sum(board[i,j,k] for i in 1:9, j in 1:9, k in 1:9))
 
 # constraints
 
-# cons1: exactly one person per shift
-for j in 1:shift
-    @constraint(m, sum( x[i,j] for i in 1:staff) == 1)
+# cons1: each digit appears exactly once in each row
+for i in 1:9
+    for k in 1:9
+        @constraint(m, sum(board[i, j, k] for j in 1:9) == 1)
+    end
 end
 
-# cons2: maximum 4 shifts per week per person
-for i in 1:staff
-    @constraint(m, sum( x[i,j] for j in 1:shift) <= 4)
+# cons2: each digit appears exactly once in each column
+for j in 1:9
+    for k in 1:9
+        @constraint(m, sum(board[i, j, k] for i in 1:9) == 1)
+    end
 end
 
-# cons3: minimum 1 shift per week per person
-for i in 1:staff
-    @constraint(m, sum( x[i,j] for j in 1:shift) >= 1)
+# cons3: each square contains only one digit
+for i in 1:9
+    for j in 1:9
+        @constraint(m, sum(board[i, j, k] for k in 1:9) == 1)
+    end
 end
 
-# cons4: no employee works both Sat and Sun in one weekend
-for i in 1:staff
-    @constraint(m, sum( x[i,j] for j in union(sat_shift,sun_shift)) <= 1)
-end
-
-# cons5: desk employees cannot work shelving shifts
-for i in desk_staff
-    @constraint(m, sum( x[i,j] for j in shel_shift) == 0)
-end
-
-# cons6: shelving employees cannot work desk shifts
-for i in shel_staff
-    @constraint(m, sum( x[i,j] for j in desk_shift) == 0)
-end
-
-# cons7: nobody works 2 shifts (or more) in one day:
-for i in 1:staff
-    @constraint(m,  sum( x[i,j] for j in mon_shift) <= 1)
-    @constraint(m,  sum( x[i,j] for j in tue_shift) <= 1)
-    @constraint(m,  sum( x[i,j] for j in wed_shift) <= 1)
-    @constraint(m,  sum( x[i,j] for j in thu_shift) <= 1)
-    @constraint(m,  sum( x[i,j] for j in fri_shift) <= 1)
-    @constraint(m,  sum( x[i,j] for j in sat_shift) <= 1)
-    @constraint(m,  sum( x[i,j] for j in sun_shift) <= 1)
+# cons4: each digit appears exactly once in each 3x3 box
+for k in 1:9
+    for u in [0, 3, 6]
+        for v in [0, 3, 6]
+            @constraint(m, sum(board[i, j, k] for i in 1:3, j in 1:3) == 1)
+        end
+    end
 end
 
 # print(m)
@@ -64,4 +54,16 @@ end
 status = solve(m)
 
 println("Objective value: ", getobjectivevalue(m))
-assn_matrix = Array{Int64}(getvalue(x))
+solution = Array{Int8}(getvalue(board))
+
+sol_matrix = Array{Int8}(undef, 9, 9)
+
+for k in 1:9
+    for i in 1:9
+        for j in 1:9
+            if solution[i,j,k] == 1
+                sol_matrix[i,j] = k
+            end
+        end
+    end
+end

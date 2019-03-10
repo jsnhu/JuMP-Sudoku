@@ -3,15 +3,14 @@ using JuMP, GLPKMathProgInterface
 #=
     Sudoku board split into 9x9x9 cubic matrix.
     row i, column j, depth k
-    Each depth k represents the assignments [i,j]
+    Each depth k represents the location assignments [i,j]
     of one digit in a solved board.
 =#
-
 
 # optimization model
 m = Model(solver = GLPKSolverMIP())
 
-# inserting binary variable assignment matrices into dictionary
+# declaring cubic binary assignment matrix
 @variable(m, board[1:9, 1:9, 1:9], Bin)
 
 # arbitrary objective function
@@ -44,26 +43,25 @@ end
 for k in 1:9
     for u in [0, 3, 6]
         for v in [0, 3, 6]
-            @constraint(m, sum(board[i, j, k] for i in 1:3, j in 1:3) == 1)
+            @constraint(m, sum(board[i + u, j + v, k] for i in 1:3, j in 1:3) == 1)
         end
     end
 end
 
-# print(m)
-
 status = solve(m)
+sol_3d = Array{Int8}(getvalue(board))
 
-println("Objective value: ", getobjectivevalue(m))
-solution = Array{Int8}(getvalue(board))
-
-sol_matrix = Array{Int8}(undef, 9, 9)
+# flatten cubic matrix
+sol_2d = Array{Int8}(undef, 9, 9)
 
 for k in 1:9
     for i in 1:9
         for j in 1:9
             if solution[i,j,k] == 1
-                sol_matrix[i,j] = k
+                sol_2d[i,j] = k
             end
         end
     end
 end
+
+display(sol_2d)
